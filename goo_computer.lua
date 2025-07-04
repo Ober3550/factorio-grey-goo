@@ -32,137 +32,319 @@ local total_construction_bots = red['signal-D']
 local accumulator_charge = red['signal-E']
 local lastSignal = green['signal-P']
 
-local busy_construction_bots = total_construction_bots -
-                                   available_construction_bots
+local busy_construction_bots = total_construction_bots - available_construction_bots
 -- We wait less the larger the factory is,
 -- since overproduction in the late game is less catastrophic.
-local waiting_on_construction_bots = busy_construction_bots >
-                                         (currently_constructed_megatiles / 25) +
-                                         1
-local currently_in_logistic_shock = available_logistic_bots <
-                                        (total_logistic_bots / 10)
+local waiting_on_construction_bots = busy_construction_bots > (currently_constructed_megatiles / 25) + 1
+local currently_in_logistic_shock = available_logistic_bots < (total_logistic_bots / 10)
 -- This will only happen in biter runs
 local currently_in_construction_shock = total_construction_bots < 300
 
 -- This combined logic ensures that we keep building power megatiles even if
 -- the power situation has temporarily recovered
-var.currently_in_power_shock = accumulator_charge < 40 or
-                                   (var.currently_in_power_shock and
-                                       accumulator_charge < 50)
+var.currently_in_power_shock = accumulator_charge < 40 or (var.currently_in_power_shock and accumulator_charge < 50)
 var.need_power = (var.currently_in_power_shock or var.need_power)
 
-local can_build_tile = not waiting_on_construction_bots and
-                           not currently_in_logistic_shock and
+local can_build_tile = not waiting_on_construction_bots and not currently_in_logistic_shock and
                            not currently_in_construction_shock
 
 out = {}
 
+local MEGA_BASE = 1
+local MEGA_SOLAR = 2
+local SMALL_SOLAR = 108
+local SMALL_MINING = 53
+local SMALL_MINING_URANIUM = 54
+local MEGA_NUCLEAR = 106
+local DECON_TREES = 109
+local MEGA_COAL_LIQUEFACTION = 110
+local SMALL_ARTILLERY = 114
+local SMALL_LABS = 9
+
 -- Each item is in the first tier that does not contain any of its ingredients
-local ITEM_TIERS = {
-    {
-        {name = 'iron-plate', outSignal = 3},
-        {name = 'copper-plate', outSignal = 4},
-        {name = 'stone-brick', outSignal = 5}
-    }, {
-        {name = 'iron-gear-wheel', outSignal = 7},
-        {name = 'copper-cable', outSignal = 10},
-        {name = 'steel-plate', outSignal = 6},
-        {name = 'iron-stick', outSignal = 11},
-        {name = 'pipe', outSignal = 22},
-        {name = 'grenade', outSignal = 17},
-        {name = 'stone-wall', outSignal = 19},
-        {name = 'firearm-magazine', outSignal = 16},
-        {name = 'stone-furnace', outSignal = 111}
-    }, {
-        {name = 'barrel', outSignal = 85},
-        {name = 'storage-tank', outSignal = 90},
-        {name = 'heat-pipe', outSignal = 100},
-        {name = 'rail', outSignal = 27},
-        {name = 'electronic-circuit', outSignal = 12},
-        {name = 'transport-belt', outSignal = 13},
-        {name = 'pipe-to-ground', outSignal = 73},
-        {name = 'engine-unit', outSignal = 24},
-        {name = 'heat-exchanger', outSignal = 101},
-        {name = 'steam-turbine', outSignal = 102},
-        {name = 'steel-chest', outSignal = 67},
-        {name = 'automation-science-pack', outSignal = 8},
-        {name = 'piercing-rounds-magazine', outSignal = 18},
-        {name = 'boiler', outSignal = 112}
-    }, {
-        {name = 'water-barrel', outSignal = 86},
-        {name = 'electric-mining-drill', outSignal = 91},
-        {name = 'repair-pack', outSignal = 93},
-        {name = 'oil-refinery', outSignal = 84},
-        {name = 'assembling-machine-1', outSignal = 58},
-        {name = 'small-lamp', outSignal = 74},
-        {name = 'constant-combinator', outSignal = 75},
-        {name = 'decider-combinator', outSignal = 76},
-        {name = 'arithmetic-combinator', outSignal = 107},
-        {name = 'radar', outSignal = 45},
-        {name = 'inserter', outSignal = 14},
-        {name = 'lab', outSignal = 77},
-        {name = 'chemical-plant', outSignal = 78},
-        {name = 'pump', outSignal = 89},
-        {name = 'solar-panel', outSignal = 46},
-        {name = 'logistic-science-pack', outSignal = 15},
-        {name = 'military-science-pack', outSignal = 20}
-    }, {
-        {name = 'concrete', outSignal = 79},
-        {name = 'fast-inserter', outSignal = 55},
-        {name = 'assembling-machine-2', outSignal = 59},
-        {name = 'plastic-bar', outSignal = 21},
-        {name = 'lubricant-barrel', outSignal = 34},
-        {name = 'solid-fuel', outSignal = 42},
-        {name = 'sulfur', outSignal = 25}
-    }, {
-        {name = 'hazard-concrete', outSignal = 80},
-        {name = 'refined-concrete', outSignal = 81},
-        {name = 'advanced-circuit', outSignal = 23},
-        {name = 'explosives', outSignal = 96},
-        {name = 'sulfuric-acid-barrel', outSignal = 32},
-        {name = 'chemical-science-pack', outSignal = 26},
-        {name = 'low-density-structure', outSignal = 31},
-        {name = 'electric-engine-unit', outSignal = 35},
-        {name = 'rocket-fuel', outSignal = 43}
-    }, {
-        {name = 'active-provider-chest', outSignal = 68},
-        {name = 'passive-provider-chest', outSignal = 69},
-        {name = 'storage-chest', outSignal = 70},
-        {name = 'buffer-chest', outSignal = 71},
-        {name = 'requester-chest', outSignal = 72},
-        {name = 'refined-hazard-concrete', outSignal = 82},
-        {name = 'nuclear-reactor', outSignal = 99},
-        {name = 'centrifuge', outSignal = 103},
-        {name = 'substation', outSignal = 57},
-        {name = 'roboport', outSignal = 66},
-        {name = 'bulk-inserter', outSignal = 56},
-        {name = 'electric-furnace', outSignal = 29},
-        {name = 'explosive-cannon-shell', outSignal = 97},
-        {name = 'battery', outSignal = 33},
-        {name = 'processing-unit', outSignal = 36},
-        {name = 'productivity-module', outSignal = 28},
-        {name = 'speed-module', outSignal = 39},
-        {name = 'efficiency-module', outSignal = 61},
-        {name = 'artillery-turret', outSignal = 113}
-    }, {
-        {name = 'laser-turret', outSignal = 92},
-        {name = 'artillery-shell', outSignal = 98},
-        {name = 'assembling-machine-3', outSignal = 60},
-        {name = 'productivity-module-2', outSignal = 64},
-        {name = 'speed-module-2', outSignal = 62},
-        {name = 'rocket-silo', outSignal = 83},
-        {name = 'accumulator', outSignal = 40},
-        {name = 'production-science-pack', outSignal = 30},
-        {name = 'flying-robot-frame', outSignal = 37}
-    }, {
-        {name = 'productivity-module-3', outSignal = 65},
-        {name = 'speed-module-3', outSignal = 63},
-        {name = 'logistic-robot', outSignal = 94},
-        {name = 'construction-robot', outSignal = 95},
-        {name = 'satellite', outSignal = 44},
-        {name = 'utility-science-pack', outSignal = 38}
-    }, {{name = 'space-science-pack', outSignal = 47}}
-}
+local ITEM_TIERS = {{{
+    name = 'iron-plate',
+    outSignal = 3
+}, {
+    name = 'copper-plate',
+    outSignal = 4
+}, {
+    name = 'stone-brick',
+    outSignal = 5
+}}, {{
+    name = 'iron-gear-wheel',
+    outSignal = 7
+}, {
+    name = 'copper-cable',
+    outSignal = 10
+}, {
+    name = 'steel-plate',
+    outSignal = 6
+}, {
+    name = 'iron-stick',
+    outSignal = 11
+}, {
+    name = 'pipe',
+    outSignal = 22
+}, {
+    name = 'grenade',
+    outSignal = 17
+}, {
+    name = 'stone-wall',
+    outSignal = 19
+}, {
+    name = 'firearm-magazine',
+    outSignal = 16
+}, {
+    name = 'stone-furnace',
+    outSignal = 111
+}}, {{
+    name = 'barrel',
+    outSignal = 85
+}, {
+    name = 'storage-tank',
+    outSignal = 90
+}, {
+    name = 'heat-pipe',
+    outSignal = 100
+}, {
+    name = 'rail',
+    outSignal = 27
+}, {
+    name = 'electronic-circuit',
+    outSignal = 12
+}, {
+    name = 'transport-belt',
+    outSignal = 13
+}, {
+    name = 'pipe-to-ground',
+    outSignal = 73
+}, {
+    name = 'engine-unit',
+    outSignal = 24
+}, {
+    name = 'heat-exchanger',
+    outSignal = 101
+}, {
+    name = 'steam-turbine',
+    outSignal = 102
+}, {
+    name = 'steel-chest',
+    outSignal = 67
+}, {
+    name = 'automation-science-pack',
+    outSignal = 8
+}, {
+    name = 'piercing-rounds-magazine',
+    outSignal = 18
+}, {
+    name = 'boiler',
+    outSignal = 112
+}}, {{
+    name = 'water-barrel',
+    outSignal = 86
+}, {
+    name = 'electric-mining-drill',
+    outSignal = 91
+}, {
+    name = 'repair-pack',
+    outSignal = 93
+}, {
+    name = 'oil-refinery',
+    outSignal = 84
+}, {
+    name = 'assembling-machine-1',
+    outSignal = 58
+}, {
+    name = 'small-lamp',
+    outSignal = 74
+}, {
+    name = 'constant-combinator',
+    outSignal = 75
+}, {
+    name = 'decider-combinator',
+    outSignal = 76
+}, {
+    name = 'arithmetic-combinator',
+    outSignal = 107
+}, {
+    name = 'radar',
+    outSignal = 45
+}, {
+    name = 'inserter',
+    outSignal = 14
+}, {
+    name = 'lab',
+    outSignal = 77
+}, {
+    name = 'chemical-plant',
+    outSignal = 78
+}, {
+    name = 'pump',
+    outSignal = 89
+}, {
+    name = 'solar-panel',
+    outSignal = 46
+}, {
+    name = 'logistic-science-pack',
+    outSignal = 15
+}, {
+    name = 'military-science-pack',
+    outSignal = 20
+}}, {{
+    name = 'concrete',
+    outSignal = 79
+}, {
+    name = 'fast-inserter',
+    outSignal = 55
+}, {
+    name = 'assembling-machine-2',
+    outSignal = 59
+}, {
+    name = 'plastic-bar',
+    outSignal = 21
+}, {
+    name = 'lubricant-barrel',
+    outSignal = 34
+}, {
+    name = 'solid-fuel',
+    outSignal = 42
+}, {
+    name = 'sulfur',
+    outSignal = 25
+}}, {{
+    name = 'hazard-concrete',
+    outSignal = 80
+}, {
+    name = 'refined-concrete',
+    outSignal = 81
+}, {
+    name = 'advanced-circuit',
+    outSignal = 23
+}, {
+    name = 'explosives',
+    outSignal = 96
+}, {
+    name = 'sulfuric-acid-barrel',
+    outSignal = 32
+}, {
+    name = 'chemical-science-pack',
+    outSignal = 26
+}, {
+    name = 'low-density-structure',
+    outSignal = 31
+}, {
+    name = 'electric-engine-unit',
+    outSignal = 35
+}, {
+    name = 'rocket-fuel',
+    outSignal = 43
+}}, {{
+    name = 'active-provider-chest',
+    outSignal = 68
+}, {
+    name = 'passive-provider-chest',
+    outSignal = 69
+}, {
+    name = 'storage-chest',
+    outSignal = 70
+}, {
+    name = 'buffer-chest',
+    outSignal = 71
+}, {
+    name = 'requester-chest',
+    outSignal = 72
+}, {
+    name = 'refined-hazard-concrete',
+    outSignal = 82
+}, {
+    name = 'nuclear-reactor',
+    outSignal = 99
+}, {
+    name = 'centrifuge',
+    outSignal = 103
+}, {
+    name = 'substation',
+    outSignal = 57
+}, {
+    name = 'roboport',
+    outSignal = 66
+}, {
+    name = 'bulk-inserter',
+    outSignal = 56
+}, {
+    name = 'electric-furnace',
+    outSignal = 29
+}, {
+    name = 'explosive-cannon-shell',
+    outSignal = 97
+}, {
+    name = 'battery',
+    outSignal = 33
+}, {
+    name = 'processing-unit',
+    outSignal = 36
+}, {
+    name = 'productivity-module',
+    outSignal = 28
+}, {
+    name = 'speed-module',
+    outSignal = 39
+}, {
+    name = 'efficiency-module',
+    outSignal = 61
+}, {
+    name = 'artillery-turret',
+    outSignal = 113
+}}, {{
+    name = 'laser-turret',
+    outSignal = 92
+}, {
+    name = 'artillery-shell',
+    outSignal = 98
+}, {
+    name = 'assembling-machine-3',
+    outSignal = 60
+}, {
+    name = 'productivity-module-2',
+    outSignal = 64
+}, {
+    name = 'speed-module-2',
+    outSignal = 62
+}, {
+    name = 'rocket-silo',
+    outSignal = 83
+}, {
+    name = 'accumulator',
+    outSignal = 40
+}, {
+    name = 'production-science-pack',
+    outSignal = 30
+}, {
+    name = 'flying-robot-frame',
+    outSignal = 37
+}}, {{
+    name = 'productivity-module-3',
+    outSignal = 65
+}, {
+    name = 'speed-module-3',
+    outSignal = 63
+}, {
+    name = 'logistic-robot',
+    outSignal = 94
+}, {
+    name = 'construction-robot',
+    outSignal = 95
+}, {
+    name = 'satellite',
+    outSignal = 44
+}, {
+    name = 'utility-science-pack',
+    outSignal = 38
+}}, {{
+    name = 'space-science-pack',
+    outSignal = 47
+}}}
 
 function choose_item_from_tiers()
     for i = 1, #ITEM_TIERS do
@@ -174,8 +356,7 @@ function choose_item_from_tiers()
             -- Check if this items demand is higher than the other ones
             -- in the tier that we've seen
             if red[currrent_item.name] < 0 and
-                (most_needed_item == nil or red[currrent_item.name] <
-                    red[most_needed_item.name]) then
+                (most_needed_item == nil or red[currrent_item.name] < red[most_needed_item.name]) then
                 -- If we just built this tile, don't choose it, but set
                 -- check_again to true in case nothing else in the tier
                 -- is in demand
@@ -194,8 +375,7 @@ function choose_item_from_tiers()
             for j = 1, #current_tier do
                 local currrent_item = current_tier[j]
                 if red[currrent_item.name] < 0 and
-                    (most_needed_item == nil or red[currrent_item.name] <
-                        red[most_needed_item.name]) then
+                    (most_needed_item == nil or red[currrent_item.name] < red[most_needed_item.name]) then
                     most_needed_item = currrent_item
                 end
             end
@@ -237,8 +417,7 @@ end
 
 if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
     -- Megatile stuff
-    if var.tilesBuilt % 8 == 0 and var.tilesBuilt / 8 >=
-        currently_constructed_megatiles then
+    if var.tilesBuilt % 8 == 0 and var.tilesBuilt / 8 >= currently_constructed_megatiles then
         if not var.is_surveying then
             var.is_surveying = true
             local n = currently_constructed_megatiles
@@ -279,8 +458,7 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
             out['green/signal-Y'] = var.megablock_y
             out['green/signal-W'] = 50
             out['green/signal-H'] = 50
-            game.print('Surveying megatile ' ..
-                           (currently_constructed_megatiles + 1))
+            game.print('Surveying megatile ' .. (currently_constructed_megatiles + 1))
             delay = 60
         else
             var.is_surveying = false
@@ -288,22 +466,19 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
             -- If we're currently building something, keep building it.
             -- Unless it's blueprint 109, that's the tree-clearing blueprint
             -- applied during surveying
-            if green['construction-robot'] > 0 and green['construction-robot'] ~=
-                109 then
+            if green['construction-robot'] > 0 and green['construction-robot'] ~= 109 then
                 newSignal = green['construction-robot']
                 -- The first Megatile should be nuclear
             elseif currently_constructed_megatiles == 1 then
-                newSignal = 106
+                newSignal = MEGA_NUCLEAR
                 var.tilesBuilt = var.tilesBuilt + 8
                 -- If the megatile has uranium, or has abundant resources,
                 -- it must be mined (we'll use a blank patch and let the
                 -- smaller surveys divy it up)
-            elseif green['uranium-ore'] > 100000 or green['uranium-ore'] +
-                green['iron-ore'] + green['copper-ore'] + green['stone'] +
-                green['coal'] > 1000000 then
-                game.print((currently_constructed_megatiles + 1) ..
-                               '[img=item.laser-turret] [img=item.roboport]')
-                newSignal = 1
+            elseif green['uranium-ore'] > 100000 or green['uranium-ore'] + green['iron-ore'] + green['copper-ore'] +
+                green['stone'] + green['coal'] > 1000000 then
+                game.print((currently_constructed_megatiles + 1) .. '[img=item.laser-turret] [img=item.roboport]')
+                newSignal = MEGA_BASE
                 -- Only build power megatiles if we need power
             elseif var.need_power then
                 -- - Don't build more than one nuclear plant in the first 9 megatiles
@@ -312,40 +487,33 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
                 --   then go ahead, whatever)
                 -- - Don't build nuclear if we built it in the last 2 megatiles
                 if currently_constructed_megatiles > 10 and
-                    (red['nuclear-reactor'] > 3 or
-                        (red['nuclear-reactor'] > -10000 and
-                            green['nuclear-reactor'] == 0)) and
-                    currently_constructed_megatiles >= var.last_nuclear_megatile +
-                    1 then
+                    (red['nuclear-reactor'] > 3 or (red['nuclear-reactor'] > -10000 and green['nuclear-reactor'] == 0)) and
+                    currently_constructed_megatiles >= var.last_nuclear_megatile + 1 then
                     game.print((currently_constructed_megatiles + 1) ..
                                    '[img=item.nuclear-reactor] [img=item.steam-turbine]')
-                    newSignal = 106
-                    var.last_nuclear_megatile =
-                        currently_constructed_megatiles + 1
+                    newSignal = MEGA_NUCLEAR
+                    var.last_nuclear_megatile = currently_constructed_megatiles + 1
                 else
-                    game.print((currently_constructed_megatiles + 1) ..
-                                   '[img=item.solar-panel] [img=item.accumulator]')
-                    newSignal = 2
+                    game.print((currently_constructed_megatiles + 1) .. '[img=item.solar-panel] [img=item.accumulator]')
+                    newSignal = MEGA_SOLAR
                 end
                 var.need_power = false
                 var.tilesBuilt = var.tilesBuilt + 8
             elseif currently_constructed_megatiles < 9 then
-                newSignal = 2
+                newSignal = MEGA_SOLAR
                 var.tilesBuilt = var.tilesBuilt + 8
                 -- If we're good on power, but light on oil products,
                 -- build an oil processing megatile
             elseif lastSignal ~= 110 and
-                (red['petroleum-gas-barrel'] < 0 or red['light-oil-barrel'] < 0 or
-                    red['heavy-oil-barrel'] < 0) then
+                (red['petroleum-gas-barrel'] < 0 or red['light-oil-barrel'] < 0 or red['heavy-oil-barrel'] < 0) then
                 game.print((currently_constructed_megatiles + 1) ..
                                '[img=item.oil-refinery] [img=fluid.petroleum-gas] [img=fluid.light-oil] [img=fluid.heavy-oil]')
-                newSignal = 110
+                newSignal = MEGA_COAL_LIQUEFACTION
                 var.tilesBuilt = var.tilesBuilt + 8
                 -- If we're good on power and oil, build a blank megatile
             else
-                game.print((currently_constructed_megatiles + 1) ..
-                               '[img=item.laser-turret] [img=item.roboport]')
-                newSignal = 1
+                game.print((currently_constructed_megatiles + 1) .. '[img=item.laser-turret] [img=item.roboport]')
+                newSignal = MEGA_BASE
             end
             var.is_paving = true
 
@@ -381,8 +549,7 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
 
             -- Once the factory starts getting big, we want to build an 
             -- artillery turret after each time we round a corner.
-            var.need_artillery = var.need_artillery or 
-                (currently_constructed_megatiles > 36 and steps == max_steps - 1)
+            var.need_artillery = var.need_artillery or (currently_constructed_megatiles > 36 and steps == max_steps - 1)
 
             var.megablock_x = x * 48 + 2
             var.megablock_y = y * 48
@@ -434,19 +601,18 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
             newSignal = green['construction-robot']
         else
             if (green['uranium-ore'] > 100000 and red['uranium-ore'] < 100000) then
-                tagSignal = {type = "item", name = "uranium-ore"}
-                game.print(currently_constructed_megatiles .. ' * 8 + ' ..
-                               (var.tilesBuilt % 8 + 1) .. ' = ' ..
+                tagSignal = {
+                    type = "item",
+                    name = "uranium-ore"
+                }
+                game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
                                (var.tilesBuilt + 1) .. '[img=item.uranium-ore]')
-                newSignal = 54
+                newSignal = SMALL_MINING_URANIUM
             elseif (green['iron-ore'] > 100000 and red['iron-ore'] < 250000) or
                 (green['copper-ore'] > 100000 and red['copper-ore'] < 250000) or
-                (green['stone'] > 100000 and red['stone'] < 200000) or
-                (green['coal'] > 100000 and red['coal'] < 250000) then
+                (green['stone'] > 100000 and red['stone'] < 200000) or (green['coal'] > 100000 and red['coal'] < 250000) then
                 local oreType = nil
-                local maxAvailable = math.max(green['iron-ore'],
-                                              green['copper-ore'],
-                                              green['stone'], green['coal'])
+                local maxAvailable = math.max(green['iron-ore'], green['copper-ore'], green['stone'], green['coal'])
                 if green['iron-ore'] == maxAvailable then
                     oreType = 'iron-ore'
                 elseif green['copper-ore'] == maxAvailable then
@@ -456,53 +622,54 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
                 elseif green['coal'] == maxAvailable then
                     oreType = 'coal'
                 end
-                tagSignal = {type = "item", name = oreType}
-                game.print(currently_constructed_megatiles .. ' * 8 + ' ..
-                               (var.tilesBuilt % 8 + 1) .. ' = ' ..
-                               (var.tilesBuilt + 1) .. '[img=item.' .. oreType ..
-                               ']')
-                newSignal = 53
+                tagSignal = {
+                    type = "item",
+                    name = oreType
+                }
+                game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
+                               (var.tilesBuilt + 1) .. '[img=item.' .. oreType .. ']')
+                newSignal = SMALL_MINING
             elseif var.need_artillery then
                 var.need_artillery = false
-                tagSignal = {type = "item", name = 'artillery-targeting-remote'}
-                newSignal = 114
-                game.print(currently_constructed_megatiles .. ' * 8 + ' ..
-                    (var.tilesBuilt % 8 + 1) .. ' = ' ..
-                    (var.tilesBuilt + 1) .. '[img=item.artillery-targeting-remote]')
+                tagSignal = {
+                    type = "item",
+                    name = 'artillery-targeting-remote'
+                }
+                newSignal = SMALL_ARTILLERY
+                game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
+                               (var.tilesBuilt + 1) .. '[img=item.artillery-targeting-remote]')
             else
                 local most_needed_item = choose_item_from_tiers()
 
                 if most_needed_item ~= nil then
-                    tagSignal = {type = "item", name = most_needed_item.name}
+                    tagSignal = {
+                        type = "item",
+                        name = most_needed_item.name
+                    }
                     newSignal = most_needed_item.outSignal
-                    game.print(currently_constructed_megatiles .. ' * 8 + ' ..
-                                   (var.tilesBuilt % 8 + 1) .. ' = ' ..
-                                   (var.tilesBuilt + 1) .. '[img=item.' ..
-                                   most_needed_item.name .. ']')
-                elseif currently_constructed_research_tiles < MAX_RESEARCH_TILES and
-                    game.tick > var.researchDeadline then
-                    tagSignal = {type = "virtual", name = "signal-dot"}
-                    game.print(currently_constructed_megatiles .. ' * 8 + ' ..
-                                   (var.tilesBuilt % 8 + 1) .. ' = ' ..
+                    game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
+                                   (var.tilesBuilt + 1) .. '[img=item.' .. most_needed_item.name .. ']')
+                elseif currently_constructed_research_tiles < MAX_RESEARCH_TILES and game.tick > var.researchDeadline then
+                    tagSignal = {
+                        type = "virtual",
+                        name = "signal-dot"
+                    }
+                    game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
                                    (var.tilesBuilt + 1) .. ' Research!')
-                    newSignal = 9
+                    newSignal = SMALL_LABS
                     var.researchDeadline = math.huge
                     -- This is to prevent situations where we're waiting to see
                     -- if we can build more research but we're having a power crisis
                 elseif var.currently_in_power_shock then
-                    game.print(currently_constructed_megatiles .. ' * 8 + ' ..
-                                   (var.tilesBuilt % 8 + 1) .. ' = ' ..
-                                   (var.tilesBuilt + 1) ..
-                                   ' Small Power Station')
-                    newSignal = 108
+                    game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
+                                   (var.tilesBuilt + 1) .. ' Small Power Station')
+                    newSignal = SMALL_SOLAR
                     -- If there's truly nothing we can build, start a timer and
                     -- if that's still the case when it's done, we'll build research.
                     -- This is to prevent new research tiles from sneaking in
                     -- during a really short pre-demand-shock period.
-                elseif currently_constructed_research_tiles < MAX_RESEARCH_TILES and
-                    var.researchDeadline == math.huge then
-                    game.print('Setting a research deadline in ' .. (5 * 60) ..
-                                   ' seconds...')
+                elseif currently_constructed_research_tiles < MAX_RESEARCH_TILES and var.researchDeadline == math.huge then
+                    game.print('Setting a research deadline in ' .. (5 * 60) .. ' seconds...')
                     var.researchDeadline = game.tick + (5 * 60 * 60)
                 end
             end
@@ -543,9 +710,11 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
         out['signal-X'] = tileX
         out['signal-Y'] = tileY
         if tagSignal ~= nil then
-            _api.game.get_player(1).force.add_chart_tag(_api.game.surfaces
-                                                            .nauvis, {
-                position = {x = tileX + PIN_OFFSET_X, y = tileY + PIN_OFFSET_Y},
+            _api.game.get_player(1).force.add_chart_tag(_api.game.surfaces.nauvis, {
+                position = {
+                    x = tileX + PIN_OFFSET_X,
+                    y = tileY + PIN_OFFSET_Y
+                },
                 icon = tagSignal
             })
         end
@@ -553,8 +722,7 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
             var.tilesBuilt = var.tilesBuilt + 1
             var.is_surveying = false
             if var.researchDeadline ~= math.huge then
-                game.print('Cancelling research deadline, ' ..
-                               math.ceil((var.researchDeadline - game.tick) / 60) ..
+                game.print('Cancelling research deadline, ' .. math.ceil((var.researchDeadline - game.tick) / 60) ..
                                ' seconds were remaining')
                 var.researchDeadline = math.huge
             end
