@@ -87,14 +87,11 @@ local ITEM_TIERS = {{{
     name = 'engine-unit',
     outSignal = 24
 }, {
-    name = 'piercing-rounds-magazine',
-    outSignal = 18
+    name = 'barrel',
+    outSignal = 85
 }}, {{
     name = 'plastic-bar',
     outSignal = 21
-}, {
-    name = 'lubricant-barrel',
-    outSignal = 34
 }, {
     name = 'sulfur',
     outSignal = 25
@@ -120,11 +117,8 @@ local ITEM_TIERS = {{{
     name = 'processing-unit',
     outSignal = 36
 }}, {{
-    name = 'transport-belt',
-    outSignal = 13
-}, {
-    name = 'inserter',
-    outSignal = 14
+    name = 'piercing-rounds-magazine',
+    outSignal = 18
 }, {
     name = 'productivity-module',
     outSignal = 28
@@ -446,7 +440,7 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
                     end
                     if most_needed_item ~= nil then
                         out['signal-L'] = i
-                        return most_needed_item
+                        break
                     end
                 end
 
