@@ -160,48 +160,6 @@ local ITEM_TIERS = {{{
     outSignal = 47
 }}}
 
-function choose_item_from_tiers()
-    for i = 1, #ITEM_TIERS do
-        local current_tier = ITEM_TIERS[i]
-        local most_needed_item = nil
-        local check_again = false
-        for j = 1, #current_tier do
-            local currrent_item = current_tier[j]
-            -- Check if this items demand is higher than the other ones
-            -- in the tier that we've seen
-            if red[currrent_item.name] < 0 and
-                (most_needed_item == nil or red[currrent_item.name] < red[most_needed_item.name]) then
-                -- If we just built this tile, don't choose it, but set
-                -- check_again to true in case nothing else in the tier
-                -- is in demand
-                if currrent_item.outSignal == lastSignal then
-                    check_again = true
-                else
-                    most_needed_item = currrent_item
-                end
-            end
-        end
-        -- If the only item in this tier that is in demand is the thing we
-        -- built last tile, then fine, we'll build another.
-        -- We do not want to start checking higher tiers, since they might
-        -- depend on this item.
-        if most_needed_item == nil and check_again then
-            for j = 1, #current_tier do
-                local currrent_item = current_tier[j]
-                if red[currrent_item.name] < 0 and
-                    (most_needed_item == nil or red[currrent_item.name] < red[most_needed_item.name]) then
-                    most_needed_item = currrent_item
-                end
-            end
-        end
-        if most_needed_item ~= nil then
-            out['signal-L'] = i
-            return most_needed_item
-        end
-    end
-    return nil
-end
-
 if not var.doneInit and red['blueprint-deployer'] > 0 then
     var.doneInit = true
     var.last_nuclear_megatile = 0
@@ -453,7 +411,44 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
                 game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
                                (var.tilesBuilt + 1) .. '[img=item.artillery-targeting-remote]')
             else
-                local most_needed_item = choose_item_from_tiers()
+                local most_needed_item = nil
+                for i = 1, #ITEM_TIERS do
+                    local current_tier = ITEM_TIERS[i]
+                    local check_again = false
+                    for j = 1, #current_tier do
+                        local currrent_item = current_tier[j]
+                        -- Check if this items demand is higher than the other ones
+                        -- in the tier that we've seen
+                        if red[currrent_item.name] < 0 and
+                            (most_needed_item == nil or red[currrent_item.name] < red[most_needed_item.name]) then
+                            -- If we just built this tile, don't choose it, but set
+                            -- check_again to true in case nothing else in the tier
+                            -- is in demand
+                            if currrent_item.outSignal == lastSignal then
+                                check_again = true
+                            else
+                                most_needed_item = currrent_item
+                            end
+                        end
+                    end
+                    -- If the only item in this tier that is in demand is the thing we
+                    -- built last tile, then fine, we'll build another.
+                    -- We do not want to start checking higher tiers, since they might
+                    -- depend on this item.
+                    if most_needed_item == nil and check_again then
+                        for j = 1, #current_tier do
+                            local currrent_item = current_tier[j]
+                            if red[currrent_item.name] < 0 and
+                                (most_needed_item == nil or red[currrent_item.name] < red[most_needed_item.name]) then
+                                most_needed_item = currrent_item
+                            end
+                        end
+                    end
+                    if most_needed_item ~= nil then
+                        out['signal-L'] = i
+                        return most_needed_item
+                    end
+                end
 
                 if most_needed_item ~= nil then
                     tagSignal = {
