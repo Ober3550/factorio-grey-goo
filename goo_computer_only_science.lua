@@ -19,6 +19,9 @@ local MAX_RESEARCH_TILES = 25
 local PIN_OFFSET_X = -47
 local PIN_OFFSET_Y = 10
 
+local DEPLOYER_OFFSET_X = 2
+local DEPLOYER_OFFSET_Y = 0
+
 local newSignal = 0
 local tagSignal = nil
 
@@ -213,10 +216,10 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
                 end
             end
 
-            var.megablock_x = x * 48 + 2
-            var.megablock_y = y * 48
-            out['red/signal-X'] = var.megablock_x + 2
-            out['red/signal-Y'] = var.megablock_y
+            var.megablock_x = x * 48 + DEPLOYER_OFFSET_X
+            var.megablock_y = y * 48 + DEPLOYER_OFFSET_Y
+            out['red/signal-X'] = var.megablock_x + DEPLOYER_OFFSET_X
+            out['red/signal-Y'] = var.megablock_y + DEPLOYER_OFFSET_Y
             out['red/signal-W'] = 30
             out['red/signal-H'] = 30
             out['green/construction-robot'] = 109
@@ -317,8 +320,8 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
             -- artillery turret after each time we round a corner.
             var.need_artillery = var.need_artillery or (currently_constructed_megatiles > 36 and steps == max_steps - 1)
 
-            var.megablock_x = x * 48 + 2
-            var.megablock_y = y * 48
+            var.megablock_x = x * 48 + DEPLOYER_OFFSET_X
+            var.megablock_y = y * 48 + DEPLOYER_OFFSET_Y
             out['signal-X'] = var.megablock_x
             out['signal-Y'] = var.megablock_y
             delay = 60
@@ -355,8 +358,8 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
             end
         end
 
-        out['red/signal-X'] = var.megablock_x + x * 16 + 2
-        out['red/signal-Y'] = var.megablock_y + y * 16
+        out['red/signal-X'] = var.megablock_x + x * 16 + DEPLOYER_OFFSET_X
+        out['red/signal-Y'] = var.megablock_y + y * 16 + DEPLOYER_OFFSET_Y
         out['red/signal-W'] = 10
         out['red/signal-H'] = 10
         game.print('Surveying tile ' .. (var.tilesBuilt + 1))
@@ -454,8 +457,8 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
                                    (var.tilesBuilt + 1) .. '[img=item.' .. most_needed_item.name .. ']')
                 elseif currently_constructed_research_tiles < MAX_RESEARCH_TILES and game.tick > var.researchDeadline then
                     tagSignal = {
-                        type = "virtual",
-                        name = "signal-dot"
+                        type = "item",
+                        name = "lab"
                     }
                     game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
                                    (var.tilesBuilt + 1) .. ' Research!')
