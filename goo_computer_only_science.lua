@@ -184,9 +184,10 @@ if not var.doneInit and red['blueprint-deployer'] > 0 then
 
 end
 
+local build_next_megatile = var.tilesBuilt % 8 == 0 and var.tilesBuilt / 8 >= currently_constructed_megatiles
 if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
     -- Megatile stuff
-    if var.tilesBuilt % 8 == 0 and var.tilesBuilt / 8 >= currently_constructed_megatiles then
+    if build_next_megatile then
         if not var.is_surveying then
             var.is_surveying = true
             local n = currently_constructed_megatiles
@@ -218,8 +219,8 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
 
             var.megablock_x = x * 48 + DEPLOYER_OFFSET_X
             var.megablock_y = y * 48 + DEPLOYER_OFFSET_Y
-            out['red/signal-X'] = var.megablock_x + DEPLOYER_OFFSET_X
-            out['red/signal-Y'] = var.megablock_y + DEPLOYER_OFFSET_Y
+            out['red/signal-X'] = var.megablock_x
+            out['red/signal-Y'] = var.megablock_y
             out['red/signal-W'] = 30
             out['red/signal-H'] = 30
             out['green/construction-robot'] = 109
@@ -231,7 +232,6 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
             delay = 60
         else
             var.is_surveying = false
-
             -- If we're currently building something, keep building it.
             -- Unless it's blueprint 109, that's the tree-clearing blueprint
             -- applied during surveying
@@ -288,48 +288,10 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
 
             out['construction-robot'] = newSignal
             lastSignal = newSignal
-
-            local n = currently_constructed_megatiles
-            local x = -1
-            local y = 0
-            local steps = 0
-            local max_steps = 1
-            local turns_taken = 0
-            for i = 2, n, 1 do
-                steps = steps + 1
-                if steps == max_steps then
-                    steps = 0
-                    turns_taken = turns_taken + 1
-                end
-                if steps == 0 and turns_taken % 2 == 0 then
-                    max_steps = max_steps + 1
-                end
-
-                if turns_taken % 4 == 0 then
-                    x = x - 1
-                elseif turns_taken % 4 == 1 then
-                    y = y - 1
-                elseif turns_taken % 4 == 2 then
-                    x = x + 1
-                elseif turns_taken % 4 == 3 then
-                    y = y + 1
-                end
-            end
-
-            -- Once the factory starts getting big, we want to build an 
-            -- artillery turret after each time we round a corner.
-            var.need_artillery = var.need_artillery or (currently_constructed_megatiles > 36 and steps == max_steps - 1)
-
-            var.megablock_x = x * 48 + DEPLOYER_OFFSET_X
-            var.megablock_y = y * 48 + DEPLOYER_OFFSET_Y
-            out['signal-X'] = var.megablock_x
-            out['signal-Y'] = var.megablock_y
-            delay = 60
         end
-
+    elseif not var.is_surveying then
         -- If this isn't a megatile, check the tile and see if there are
         -- resources before building anything.
-    elseif not var.is_surveying then
         var.is_surveying = true
         local n = (var.tilesBuilt % 8) + 1
         local x = -1
@@ -358,8 +320,10 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
             end
         end
 
-        out['red/signal-X'] = var.megablock_x + x * 16 + DEPLOYER_OFFSET_X
-        out['red/signal-Y'] = var.megablock_y + y * 16 + DEPLOYER_OFFSET_Y
+        var.miniblock_x = var.megablock_x + x * 16
+        var.miniblock_y = var.megablock_y + y * 16
+        out['red/signal-X'] = var.miniblock_x
+        out['red/signal-Y'] = var.miniblock_y
         out['red/signal-W'] = 10
         out['red/signal-H'] = 10
         game.print('Surveying tile ' .. (var.tilesBuilt + 1))
@@ -484,42 +448,13 @@ if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
         out['construction-robot'] = newSignal
         lastSignal = newSignal
 
-        local n = (var.tilesBuilt % 8) + 1
-        local x = -1
-        local y = 0
-        local steps = 0
-        local max_steps = 1
-        local turns_taken = 0
-        for i = 2, n, 1 do
-            steps = steps + 1
-            if steps == max_steps then
-                steps = 0
-                turns_taken = turns_taken + 1
-            end
-            if steps == 0 and turns_taken % 2 == 0 then
-                max_steps = max_steps + 1
-            end
-
-            if turns_taken % 4 == 0 then
-                x = x - 1
-            elseif turns_taken % 4 == 1 then
-                y = y - 1
-            elseif turns_taken % 4 == 2 then
-                x = x + 1
-            elseif turns_taken % 4 == 3 then
-                y = y + 1
-            end
-        end
-
-        local tileX = var.megablock_x + x * 16
-        local tileY = var.megablock_y + y * 16
-        out['signal-X'] = tileX
-        out['signal-Y'] = tileY
+        out['signal-X'] = var.miniblock_x
+        out['signal-Y'] = var.miniblock_y
         if tagSignal ~= nil then
             _api.game.get_player(1).force.add_chart_tag(_api.game.surfaces.nauvis, {
                 position = {
-                    x = tileX + PIN_OFFSET_X,
-                    y = tileY + PIN_OFFSET_Y
+                    x = var.miniblock_x + PIN_OFFSET_X,
+                    y = var.miniblock_y + PIN_OFFSET_Y
                 },
                 icon = tagSignal
             })
