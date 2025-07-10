@@ -13,6 +13,9 @@
 --                         0 otherwise
 -- (Note: The red wire goes to the resource scanner, the green wire goes to the
 -- blueprint deployer and also feeds back to the input)
+local DEBUG = false
+local PAUSE = false
+
 local MAX_MEGATILES = 484
 local MAX_RESEARCH_TILES = 25
 
@@ -25,8 +28,12 @@ local DEPLOYER_OFFSET_Y = 1
 local newSignal = 0
 local tagSignal = nil
 
+if not var.tilesBuilt then
+    var.tilesBuilt = 0
+end
+
 -- Convert the input signals to local variables for readability
-local currently_constructed_megatiles = red['signal-info']
+local currently_constructed_megatiles = math.floor(var.tilesBuilt / 8) + 1
 local currently_constructed_research_tiles = red['signal-dot']
 local available_logistic_bots = red['logistic-robot']
 local total_logistic_bots = red['signal-B']
@@ -53,7 +60,7 @@ local can_build_tile = not waiting_on_construction_bots and not currently_in_log
 
 out = {}
 
-local BRAIN_TILE = 115
+local MEGA_BRAIN = 115
 local MEGA_BASE = 1
 local MEGA_SOLAR = 2
 local SMALL_SOLAR = 108
@@ -185,18 +192,30 @@ local ITEM_TIERS = {{{
     outSignal = 47
 }}}
 
-local DEBUG = true
+delay = 30 * 60
 
-delay = 60 * 60
+local MEGA_SURVEY = 1
+local MEGA_CHECK = 2
+local MEGA_BUILD = 3
+local MEGA_WAIT_SURVEY = 4
+local MEGA_WAIT = 5
+local MINI_SURVEY = 6
+local MINI_CHECK = 7
+local MINI_BUILD = 8
+local MINI_WAIT_SURVEY = 9
+local MINI_WAIT = 10
+local STATE_NAMES = {"MEGA_SURVEY", "MEGA_CHECK", "MEGA_BUILD", "MEGA_WAIT_SURVEY", "MEGA_WAIT", "MINI_SURVEY",
+                     "MINI_CHECK", "MINI_BUILD", "MINI_WAIT_SURVEY", "MINI_WAIT"}
 
 local blueprint_book = green['blueprint-book'] == 1
-if blueprint_book then
+if blueprint_book and not PAUSE then
     if not var.doneInit then
         if currently_constructed_megatiles == 1 then
             var.doneInit = true
             var.last_nuclear_megatile = 0
             var.researchDeadline = math.huge
             var.need_artillery = false
+            var.CURRENT_STATE = MEGA_SURVEY
 
             -- We have to track tilesBuilt as a variable because we can't trust the 
             -- input from the outside world. If part of a tile has been placed down,
@@ -204,16 +223,14 @@ if blueprint_book then
             -- deploying two different blueprints on the same tile space.
             -- Instead we wait for the numbers from the circuit network to match 
             -- the expected number from the variable before proceeeding.
-            var.tilesBuilt = red['blueprint-deployer']
             game.print('Initialized with ' .. var.tilesBuilt .. ' tiles built')
 
-            var.megablock_x = DEPLOYER_OFFSET_X
-            var.megablock_y = DEPLOYER_OFFSET_Y
-            out['green/signal-X'] = var.megablock_x
-            out['green/signal-Y'] = var.megablock_y
-            out['green/construction-robot'] = BRAIN_TILE
+            -- var.megablock_x = DEPLOYER_OFFSET_X
+            -- var.megablock_y = DEPLOYER_OFFSET_Y
+            -- out['green/signal-X'] = var.megablock_x
+            -- out['green/signal-Y'] = var.megablock_y
+            -- out['green/construction-robot'] = BRAIN_TILE
             out['red/deconstruction-planner'] = -2
-            delay = 60
 
             for i = 1, #ITEM_TIERS do
                 local current_tier = ITEM_TIERS[i]
@@ -226,327 +243,334 @@ if blueprint_book then
             end
         end
     else
-        if DEBUG and waiting_on_construction_bots then
-            game.print("waiting_on_construction_bots")
+        if DEBUG then
+            game.print("Current state: " .. STATE_NAMES[var.CURRENT_STATE])
         end
-        if DEBUG and currently_in_logistic_shock then
-            game.print("currently_in_logistic_shock")
+        local ghosts = {}
+        local ignore_signals = {
+            ["signal-X"] = true,
+            ["signal-Y"] = true,
+            ["signal-W"] = true,
+            ["signal-H"] = true,
+            ["signal-P"] = true,
+            ["construction-robot"] = true,
+            ["blueprint-book"] = true,
+            ["coal"] = true,
+            ["stone"] = true,
+            ["uranium-ore"] = true,
+            ["copper-ore"] = true,
+            ["iron-ore"] = true
+        }
+        for k, v in pairs(green) do
+            if ignore_signals[k] == nil then
+                ghosts[#ghosts + 1] = k
+            end
         end
-        if DEBUG and currently_in_construction_shock then
-            game.print("currently_in_construction_shock")
-        end
-        local build_next_megatile = var.tilesBuilt % 8 == 0 and var.tilesBuilt / 8 >= currently_constructed_megatiles
-        if can_build_tile and currently_constructed_megatiles < MAX_MEGATILES then
-            -- Megatile stuff
-            if build_next_megatile then
-                if not var.is_surveying then
-                    if DEBUG then
-                        game.print("Starting megatile surveying")
-                    end
-                    var.is_surveying = true
-                    local n = currently_constructed_megatiles
-                    local x = -1
-                    local y = 0
-                    local steps = 0
-                    local max_steps = 1
-                    local turns_taken = 0
-                    for i = 2, n, 1 do
-                        steps = steps + 1
-                        if steps == max_steps then
-                            steps = 0
-                            turns_taken = turns_taken + 1
-                        end
-                        if steps == 0 and turns_taken % 2 == 0 then
-                            max_steps = max_steps + 1
-                        end
-
-                        if turns_taken % 4 == 0 then
-                            x = x - 1
-                        elseif turns_taken % 4 == 1 then
-                            y = y - 1
-                        elseif turns_taken % 4 == 2 then
-                            x = x + 1
-                        elseif turns_taken % 4 == 3 then
-                            y = y + 1
-                        end
-                    end
-
-                    var.megablock_x = x * 48 + DEPLOYER_OFFSET_X
-                    var.megablock_y = y * 48 + DEPLOYER_OFFSET_Y
-                    if DEBUG then
-                        game.print("spiral_x:" .. x)
-                        game.print("spiral_y:" .. y)
-                        game.print("megatile_x:" .. var.megablock_x)
-                        game.print("megatile_y:" .. var.megablock_y)
-                    end
-                    out['red/signal-X'] = var.megablock_x
-                    out['red/signal-Y'] = var.megablock_y
-                    out['red/signal-W'] = 30
-                    out['red/signal-H'] = 30
-                    out['green/construction-robot'] = 109
-                    out['green/signal-X'] = var.megablock_x
-                    out['green/signal-Y'] = var.megablock_y
-                    out['green/signal-W'] = 50
-                    out['green/signal-H'] = 50
-                    delay = 60
-                    if DEBUG then
-                        game.print('Surveying megatile ' .. (currently_constructed_megatiles + 1))
-                    end
-                else
-                    if DEBUG then
-                        game.print("Starting megatile logic")
-                    end
-                    var.is_surveying = false
-                    -- -- If we're currently building something, keep building it.
-                    -- -- Unless it's blueprint 109, that's the tree-clearing blueprint
-                    -- -- applied during surveying
-                    if green['construction-robot'] > 0 and green['construction-robot'] ~= 109 then
-                        newSignal = green['construction-robot']
-                        -- The first Megatile should be nuclear
-                        -- Only build power megatiles if we need power
-                    elseif var.need_power then
-                        if red['nuclear-reactor'] >= 4 and red['heat-exchanger'] >= 48 and red['steam-turbine'] >= 52 and
-                            red['heat-pipe'] >= 160 then
-                            game.print("Building nuclear at " .. var.megablock_x .. "x and " .. var.megablock_y .. "y")
-                            newSignal = MEGA_NUCLEAR
-                            var.tilesBuilt = var.tilesBuilt + 8
-                        else
-                            game.print("Waiting for nuclear components")
-                        end
-                    elseif green['uranium-ore'] > 100000 or green['uranium-ore'] + green['iron-ore'] +
-                        green['copper-ore'] + green['stone'] + green['coal'] > 1000000 then
-                        -- If the megatile has uranium, or has abundant resources,
-                        -- it must be mined (we'll use a blank patch and let the
-                        -- smaller surveys divy it up)
-                        game.print((currently_constructed_megatiles + 1) ..
-                                       '[img=item.laser-turret] [img=item.roboport]')
-                        newSignal = MEGA_BASE
-                    elseif lastSignal ~= 110 and
-                        (red['petroleum-gas-barrel'] < 0 or red['light-oil-barrel'] < 0 or red['heavy-oil-barrel'] < 0) then
-                        game.print((currently_constructed_megatiles + 1) ..
-                                       '[img=item.oil-refinery] [img=fluid.petroleum-gas] [img=fluid.light-oil] [img=fluid.heavy-oil]')
-                        newSignal = MEGA_COAL_LIQUEFACTION
-                        var.tilesBuilt = var.tilesBuilt + 8
-                        -- If we're good on power and oil, build a blank megatile
-                    else
-                        game.print((currently_constructed_megatiles + 1) ..
-                                       '[img=item.laser-turret] [img=item.roboport]')
-                        newSignal = MEGA_BASE
-                    end
-                    var.is_paving = true
-
-                    out['construction-robot'] = newSignal
-                    out['signal-X'] = var.megablock_x
-                    out['signal-Y'] = var.megablock_y
-                    delay = 60
-                    lastSignal = newSignal
+        if var.CURRENT_STATE == MEGA_SURVEY or var.CURRENT_STATE == MEGA_WAIT_SURVEY then
+            local n = (var.tilesBuilt / 8) + 1
+            local x = 0
+            local y = 0
+            local steps = 0
+            local max_steps = 1
+            local turns_taken = 0
+            for i = 2, n, 1 do
+                if turns_taken % 4 == 0 then
+                    x = x - 1
+                elseif turns_taken % 4 == 1 then
+                    y = y - 1
+                elseif turns_taken % 4 == 2 then
+                    x = x + 1
+                elseif turns_taken % 4 == 3 then
+                    y = y + 1
                 end
+                steps = steps + 1
+                if steps == max_steps then
+                    steps = 0
+                    turns_taken = turns_taken + 1
+                end
+                if steps == 0 and turns_taken % 2 == 0 then
+                    max_steps = max_steps + 1
+                end
+            end
+
+            var.megablock_x = x * 48 + DEPLOYER_OFFSET_X
+            var.megablock_y = y * 48 + DEPLOYER_OFFSET_Y
+
+            -- Area scanner
+            out['red/signal-X'] = var.megablock_x - 25
+            out['red/signal-Y'] = var.megablock_y - 25
+            out['red/signal-W'] = 52
+            out['red/signal-H'] = 52
+            -- Deconstruct trees and rocks
+            out['green/construction-robot'] = 109
+            out['green/signal-X'] = var.megablock_x - 24
+            out['green/signal-Y'] = var.megablock_y - 24
+            out['green/signal-W'] = 50
+            out['green/signal-H'] = 50
+
+            if DEBUG then
+                game.print('Surveying megatile ' .. n)
+                game.print("Spiral x  : " .. x)
+                game.print("Spiral y  : " .. y)
+                game.print("Megatile x: " .. var.megablock_x)
+                game.print("Megatile y: " .. var.megablock_y)
+            end
+            if var.CURRENT_STATE == MEGA_WAIT_SURVEY then
+                var.CURRENT_STATE = MEGA_WAIT
             else
-                if not var.is_surveying then
-                    if DEBUG then
-                        game.print("Starting mini tile surveying")
-                    end
-                    -- If this isn't a megatile, check the tile and see if there are
-                    -- resources before building anything.
-                    var.is_surveying = true
-                    local n = (var.tilesBuilt % 8) + 1
-                    local x = -1
-                    local y = 0
-                    local steps = 0
-                    local max_steps = 1
-                    local turns_taken = 0
-                    for i = 2, n, 1 do
-                        steps = steps + 1
-                        if steps == max_steps then
-                            steps = 0
-                            turns_taken = turns_taken + 1
-                        end
-                        if steps == 0 and turns_taken % 2 == 0 then
-                            max_steps = max_steps + 1
-                        end
+                var.CURRENT_STATE = MEGA_CHECK
+            end
 
-                        if turns_taken % 4 == 0 then
-                            x = x - 1
-                        elseif turns_taken % 4 == 1 then
-                            y = y - 1
-                        elseif turns_taken % 4 == 2 then
-                            x = x + 1
-                        elseif turns_taken % 4 == 3 then
-                            y = y + 1
-                        end
-                    end
-
-                    var.miniblock_x = var.megablock_x + x * 16
-                    var.miniblock_y = var.megablock_y + y * 16
-                    out['red/signal-X'] = var.miniblock_x
-                    out['red/signal-Y'] = var.miniblock_y
-                    out['red/signal-W'] = 10
-                    out['red/signal-H'] = 10
-                    delay = 60
-                    if DEBUG then
-                        game.print('Surveying tile ' .. (var.tilesBuilt + 1))
-                    end
+        elseif var.CURRENT_STATE == MEGA_CHECK then
+            if currently_constructed_megatiles == 1 then
+                if DEBUG then
+                    game.print("Building brain tile")
+                end
+                var.BUILD_MEGA = MEGA_BRAIN
+                var.CURRENT_STATE = MEGA_BUILD
+                var.FILLABLE_MEGA = true
+            elseif currently_constructed_megatiles == 2 or var.need_power then
+                if red['nuclear-reactor'] >= 4 and red['heat-exchanger'] >= 48 and red['steam-turbine'] >= 52 and
+                    red['heat-pipe'] >= 160 then
+                    game.print("Building nuclear at " .. var.megablock_x .. "x and " .. var.megablock_y .. "y")
+                    var.BUILD_MEGA = MEGA_NUCLEAR
+                    var.CURRENT_STATE = MEGA_BUILD
+                    var.FILLABLE_MEGA = false
                 else
-                    var.is_surveying = false
-                    if green['construction-robot'] > 0 then
-                        game.print('Redoing this for some reason...');
-                        newSignal = green['construction-robot']
-                    else
-                        if currently_constructed_megatiles == 1 then
-                            -- Create the mall modules in sequence
-                            local small_modules_ready = red['signal-green']
-                            if var.tilesBuilt == small_modules_ready then
-                                newSignal = mall_sequence[var.tilesBuilt + 1]['outSignal']
-                            elseif DEBUG then
-                                game.print("Waiting for module ready")
-                            end
-                        elseif (green['uranium-ore'] > 100000 and red['uranium-ore'] < 100000) then
-                            tagSignal = {
-                                type = "item",
-                                name = "uranium-ore"
-                            }
-                            game.print(
-                                currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
-                                    (var.tilesBuilt + 1) .. '[img=item.uranium-ore]')
-                            newSignal = SMALL_MINING_URANIUM
-                        elseif (green['iron-ore'] > 100000 and red['iron-ore'] < 250000) or
-                            (green['copper-ore'] > 100000 and red['copper-ore'] < 250000) or
-                            (green['stone'] > 100000 and red['stone'] < 200000) or
-                            (green['coal'] > 100000 and red['coal'] < 250000) then
-                            local oreType = nil
-                            local maxAvailable = math.max(green['iron-ore'], green['copper-ore'], green['stone'],
-                                green['coal'])
-                            if green['iron-ore'] == maxAvailable then
-                                oreType = 'iron-ore'
-                            elseif green['copper-ore'] == maxAvailable then
-                                oreType = 'copper-ore'
-                            elseif green['stone'] == maxAvailable then
-                                oreType = 'stone'
-                            elseif green['coal'] == maxAvailable then
-                                oreType = 'coal'
-                            end
-                            tagSignal = {
-                                type = "item",
-                                name = oreType
-                            }
-                            game.print(
-                                currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
-                                    (var.tilesBuilt + 1) .. '[img=item.' .. oreType .. ']')
-                            newSignal = SMALL_MINING
-                        elseif var.need_artillery then
-                            var.need_artillery = false
-                            tagSignal = {
-                                type = "item",
-                                name = 'artillery-targeting-remote'
-                            }
-                            newSignal = SMALL_ARTILLERY
-                            game.print(
-                                currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
-                                    (var.tilesBuilt + 1) .. '[img=item.artillery-targeting-remote]')
-                        else
-                            local most_needed_item = nil
-                            for i = 1, #ITEM_TIERS do
-                                local current_tier = ITEM_TIERS[i]
-                                local check_again = false
-                                for j = 1, #current_tier do
-                                    local currrent_item = current_tier[j]
-                                    -- Check if this items demand is higher than the other ones
-                                    -- in the tier that we've seen
-                                    if red[currrent_item.name] < 0 and
-                                        (most_needed_item == nil or red[currrent_item.name] < red[most_needed_item.name]) then
-                                        -- If we just built this tile, don't choose it, but set
-                                        -- check_again to true in case nothing else in the tier
-                                        -- is in demand
-                                        if currrent_item.outSignal == lastSignal then
-                                            check_again = true
-                                        else
-                                            most_needed_item = currrent_item
-                                        end
-                                    end
-                                end
-                                -- If the only item in this tier that is in demand is the thing we
-                                -- built last tile, then fine, we'll build another.
-                                -- We do not want to start checking higher tiers, since they might
-                                -- depend on this item.
-                                if most_needed_item == nil and check_again then
-                                    for j = 1, #current_tier do
-                                        local currrent_item = current_tier[j]
-                                        if red[currrent_item.name] < 0 and
-                                            (most_needed_item == nil or red[currrent_item.name] <
-                                                red[most_needed_item.name]) then
-                                            most_needed_item = currrent_item
-                                        end
-                                    end
-                                end
-                                if most_needed_item ~= nil then
-                                    out['signal-L'] = i
-                                    break
-                                end
-                            end
+                    game.print("Waiting for nuclear components")
+                end
+            elseif green['uranium-ore'] > 100000 or green['uranium-ore'] + green['iron-ore'] + green['copper-ore'] +
+                green['stone'] + green['coal'] > 1000000 then
+                -- If the megatile has uranium, or has abundant resources,
+                -- it must be mined (we'll use a blank patch and let the
+                -- smaller surveys divy it up)
+                game.print((currently_constructed_megatiles + 1) .. '[img=item.laser-turret] [img=item.roboport]')
+                var.BUILD_MEGA = MEGA_BASE
+                var.CURRENT_STATE = MEGA_BUILD
+                var.FILLABLE_MEGA = true
+            elseif (red['petroleum-gas-barrel'] < 0 or red['light-oil-barrel'] < 0 or red['heavy-oil-barrel'] < 0) then
+                game.print((currently_constructed_megatiles + 1) ..
+                               '[img=item.oil-refinery] [img=fluid.petroleum-gas] [img=fluid.light-oil] [img=fluid.heavy-oil]')
+                var.BUILD_MEGA = MEGA_COAL_LIQUEFACTION
+                var.CURRENT_STATE = MEGA_BUILD
+                var.FILLABLE_MEGA = false
+            else
+                -- If we're good on power and oil, build a blank megatile
+                game.print((currently_constructed_megatiles + 1) .. '[img=item.laser-turret] [img=item.roboport]')
+                var.BUILD_MEGA = MEGA_BASE
+                var.CURRENT_STATE = MEGA_BUILD
+                var.FILLABLE_MEGA = true
+            end
+        elseif var.CURRENT_STATE == MEGA_BUILD then
+            out['construction-robot'] = var.BUILD_MEGA
+            out['green/signal-X'] = var.megablock_x
+            out['green/signal-Y'] = var.megablock_y
+            delay = 1
+            var.CURRENT_STATE = MEGA_WAIT_SURVEY
+        elseif var.CURRENT_STATE == MEGA_WAIT then
+            if #ghosts > 0 then
+                game.print("Waiting for ghosts:")
+                for _, v in pairs(ghosts) do
+                    game.print(v)
+                end
+                var.CURRENT_STATE = MEGA_WAIT_SURVEY
+            else
+                game.print("Completed megatile " .. currently_constructed_megatiles)
+                if var.FILLABLE_MEGA then
+                    var.CURRENT_STATE = MINI_SURVEY
+                else
+                    var.CURRENT_STATE = MEGA_SURVEY
+                    var.tilesBuilt = var.tilesBuilt + 8
+                end
+            end
+        elseif var.CURRENT_STATE == MINI_SURVEY or var.CURRENT_STATE == MINI_WAIT_SURVEY then
+            local n = (var.tilesBuilt % 8) + 1
+            local x = -1
+            local y = 0
+            local steps = 0
+            local max_steps = 1
+            local turns_taken = 0
+            for i = 2, n, 1 do
+                steps = steps + 1
+                if steps == max_steps then
+                    steps = 0
+                    turns_taken = turns_taken + 1
+                end
+                if steps == 0 and turns_taken % 2 == 0 then
+                    max_steps = max_steps + 1
+                end
+                if turns_taken % 4 == 0 then
+                    x = x - 1
+                elseif turns_taken % 4 == 1 then
+                    y = y - 1
+                elseif turns_taken % 4 == 2 then
+                    x = x + 1
+                elseif turns_taken % 4 == 3 then
+                    y = y + 1
+                end
+            end
 
-                            if most_needed_item ~= nil then
-                                if red['electric-furnace'] >= 10 and red['requester-chest'] >= 10 and
-                                    red['passive-provider-chest'] >= 10 and red['assembling-machine-3'] >= 10 then
-                                    tagSignal = {
-                                        type = "item",
-                                        name = most_needed_item.name
-                                    }
-                                    newSignal = most_needed_item.outSignal
-                                    game.print(
-                                        currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) ..
-                                            ' = ' .. (var.tilesBuilt + 1) .. '[img=item.' .. most_needed_item.name ..
-                                            ']')
-                                end
-                            elseif currently_constructed_research_tiles < MAX_RESEARCH_TILES and game.tick >
-                                var.researchDeadline then
-                                tagSignal = {
-                                    type = "item",
-                                    name = "lab"
-                                }
-                                game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) ..
-                                               ' = ' .. (var.tilesBuilt + 1) .. ' Research!')
-                                newSignal = SMALL_LABS
-                                var.researchDeadline = math.huge
-                            elseif currently_constructed_research_tiles < MAX_RESEARCH_TILES and var.researchDeadline ==
-                                math.huge then
-                                -- If there's truly nothing we can build, start a timer and
-                                -- if that's still the case when it's done, we'll build research.
-                                -- This is to prevent new research tiles from sneaking in
-                                -- during a really short pre-demand-shock period.
-                                game.print('Setting a research deadline in ' .. (5 * 60) .. ' seconds...')
-                                var.researchDeadline = game.tick + (5 * 60 * 60)
+            var.miniblock_x = var.megablock_x + x * 16
+            var.miniblock_y = var.megablock_y + y * 16
+            out['red/signal-X'] = var.miniblock_x - 5
+            out['red/signal-Y'] = var.miniblock_y - 6
+            out['red/signal-W'] = 14
+            out['red/signal-H'] = 14
+
+            if DEBUG then
+                game.print('Surveying minitile ' .. var.tilesBuilt + 1)
+                game.print("Spiral x  : " .. x)
+                game.print("Spiral y  : " .. y)
+                game.print("Minitile x: " .. var.megablock_x)
+                game.print("Minitile y: " .. var.megablock_y)
+            end
+
+            if var.CURRENT_STATE == MINI_WAIT_SURVEY then
+                var.CURRENT_STATE = MINI_WAIT
+            else
+                var.CURRENT_STATE = MINI_CHECK
+            end
+        elseif var.CURRENT_STATE == MINI_CHECK then
+            if currently_constructed_megatiles == 1 then
+                -- Create the mall modules in sequence
+                local small_modules_ready = red['signal-green']
+                if small_modules_ready >= var.tilesBuilt then
+                    game.print("Building " .. mall_sequence[var.tilesBuilt + 1]["name"])
+                    var.BUILD_MINI = mall_sequence[var.tilesBuilt + 1]['outSignal']
+                    var.CURRENT_STATE = MINI_BUILD
+                elseif DEBUG then
+                    game.print("Waiting for module ready")
+                end
+            elseif (green['uranium-ore'] > 100000 and red['uranium-ore'] < 100000) then
+                tagSignal = {
+                    type = "item",
+                    name = "uranium-ore"
+                }
+                game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
+                               (var.tilesBuilt + 1) .. '[img=item.uranium-ore]')
+                var.BUILD_MINI = SMALL_MINING_URANIUM
+                var.CURRENT_STATE = MINI_BUILD
+            elseif (green['iron-ore'] > 100000 and red['iron-ore'] < 250000) or
+                (green['copper-ore'] > 100000 and red['copper-ore'] < 250000) or
+                (green['stone'] > 100000 and red['stone'] < 200000) or (green['coal'] > 100000 and red['coal'] < 250000) then
+                local oreType = nil
+                local maxAvailable = math.max(green['iron-ore'], green['copper-ore'], green['stone'], green['coal'])
+                if green['iron-ore'] == maxAvailable then
+                    oreType = 'iron-ore'
+                elseif green['copper-ore'] == maxAvailable then
+                    oreType = 'copper-ore'
+                elseif green['stone'] == maxAvailable then
+                    oreType = 'stone'
+                elseif green['coal'] == maxAvailable then
+                    oreType = 'coal'
+                end
+                tagSignal = {
+                    type = "item",
+                    name = oreType
+                }
+                game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
+                               (var.tilesBuilt + 1) .. '[img=item.' .. oreType .. ']')
+                var.BUILD_MINI = SMALL_MINING
+                var.CURRENT_STATE = MINI_BUILD
+            elseif var.need_artillery then
+                var.need_artillery = false
+                tagSignal = {
+                    type = "item",
+                    name = 'artillery-targeting-remote'
+                }
+                game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
+                               (var.tilesBuilt + 1) .. '[img=item.artillery-targeting-remote]')
+                var.BUILD_MINI = SMALL_ARTILLERY
+                var.CURRENT_STATE = MINI_BUILD
+            else
+                local most_needed_item = nil
+                for i = 1, #ITEM_TIERS do
+                    local current_tier = ITEM_TIERS[i]
+                    local check_again = false
+                    for j = 1, #current_tier do
+                        local currrent_item = current_tier[j]
+                        -- Check if this items demand is higher than the other ones
+                        -- in the tier that we've seen
+                        if red[currrent_item.name] < 0 and
+                            (most_needed_item == nil or red[currrent_item.name] < red[most_needed_item.name]) then
+                            -- If we just built this tile, don't choose it, but set
+                            -- check_again to true in case nothing else in the tier
+                            -- is in demand
+                            if currrent_item.outSignal == lastSignal then
+                                check_again = true
+                            else
+                                most_needed_item = currrent_item
                             end
                         end
                     end
-
-                    out['construction-robot'] = newSignal
-                    lastSignal = newSignal
-
-                    out['signal-X'] = var.miniblock_x
-                    out['signal-Y'] = var.miniblock_y
-                    delay = 60
-                    if tagSignal ~= nil then
-                        _api.game.get_player(1).force.add_chart_tag(_api.game.surfaces.nauvis, {
-                            position = {
-                                x = var.miniblock_x + PIN_OFFSET_X,
-                                y = var.miniblock_y + PIN_OFFSET_Y
-                            },
-                            icon = tagSignal
-                        })
-                    end
-                    if green['construction-robot'] == 0 and newSignal ~= 0 then
-                        var.tilesBuilt = var.tilesBuilt + 1
-                        var.is_surveying = false
-                        if var.researchDeadline ~= math.huge then
-                            game.print('Cancelling research deadline, ' ..
-                                           math.ceil((var.researchDeadline - game.tick) / 60) ..
-                                           ' seconds were remaining')
-                            var.researchDeadline = math.huge
+                    -- If the only item in this tier that is in demand is the thing we
+                    -- built last tile, then fine, we'll build another.
+                    -- We do not want to start checking higher tiers, since they might
+                    -- depend on this item.
+                    if most_needed_item == nil and check_again then
+                        for j = 1, #current_tier do
+                            local currrent_item = current_tier[j]
+                            if red[currrent_item.name] < 0 and
+                                (most_needed_item == nil or red[currrent_item.name] < red[most_needed_item.name]) then
+                                most_needed_item = currrent_item
+                            end
                         end
                     end
+                    if most_needed_item ~= nil then
+                        out['signal-L'] = i
+                        break
+                    end
+                end
+                if most_needed_item ~= nil then
+                    tagSignal = {
+                        type = "item",
+                        name = most_needed_item.name
+                    }
+                    game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
+                                   (var.tilesBuilt + 1) .. '[img=item.' .. most_needed_item.name .. ']')
+                    var.BUILD_MINI = most_needed_item.outSignal
+                    var.CURRENT_STATE = MINI_BUILD
+                elseif currently_constructed_research_tiles < MAX_RESEARCH_TILES and game.tick > var.researchDeadline then
+                    tagSignal = {
+                        type = "item",
+                        name = "lab"
+                    }
+                    game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
+                                   (var.tilesBuilt + 1) .. ' Research!')
+                    var.BUILD_MINI = SMALL_LABS
+                    var.CURRENT_STATE = MINI_BUILD
+                    var.researchDeadline = math.huge
+                elseif currently_constructed_research_tiles < MAX_RESEARCH_TILES and var.researchDeadline == math.huge then
+                    -- If there's truly nothing we can build, start a timer and
+                    -- if that's still the case when it's done, we'll build research.
+                    -- This is to prevent new research tiles from sneaking in
+                    -- during a really short pre-demand-shock period.
+                    game.print('Setting a research deadline in ' .. (5 * 60) .. ' seconds...')
+                    var.researchDeadline = game.tick + (5 * 60 * 60)
+                end
+            end
+        elseif var.CURRENT_STATE == MINI_BUILD then
+            out['construction-robot'] = var.BUILD_MINI
+            out['signal-X'] = var.miniblock_x
+            out['signal-Y'] = var.miniblock_y
+            delay = 1
+            var.CURRENT_STATE = MINI_WAIT_SURVEY
+        elseif var.CURRENT_STATE == MINI_WAIT then
+            if #ghosts > 0 then
+                game.print("Waiting for ghosts:")
+                for _, v in pairs(ghosts) do
+                    game.print(v)
+                end
+                var.CURRENT_STATE = MINI_WAIT_SURVEY
+            else
+                var.tilesBuilt = var.tilesBuilt + 1
+                game.print("Completed minitile " .. var.tilesBuilt)
+                if var.tilesBuilt % 8 == 0 then
+                    var.CURRENT_STATE = MEGA_SURVEY
+                else
+                    var.CURRENT_STATE = MINI_SURVEY
                 end
             end
         end
-        out['signal-P'] = lastSignal
     end
 end
