@@ -122,12 +122,6 @@ local ITEM_TIERS = {{{
     name = 'electronic-circuit',
     outSignal = 12
 }, {
-    name = 'engine-unit',
-    outSignal = 24
-}, {
-    name = 'barrel',
-    outSignal = 85
-}}, {{
     name = 'plastic-bar',
     outSignal = 21
 }, {
@@ -139,21 +133,33 @@ local ITEM_TIERS = {{{
 }, {
     name = 'sulfuric-acid-barrel',
     outSignal = 32
+}}, {{
+    name = 'processing-unit',
+    outSignal = 36
 }, {
+    name = 'battery',
+    outSignal = 33
+}}, {{
+    name = 'engine-unit',
+    outSignal = 24
+}}, {{
+    name = 'electric-engine-unit',
+    outSignal = 35
+}}, {{
+    name = 'flying-robot-frame',
+    outSignal = 37
+}}, {{
+    name = 'speed-module-3',
+    outSignal = 63
+}, {
+    name = 'productivity-module-3',
+    outSignal = 65
+}}, {{
     name = 'low-density-structure',
     outSignal = 31
 }, {
-    name = 'electric-engine-unit',
-    outSignal = 35
-}, {
     name = 'rocket-fuel',
     outSignal = 43
-}}, {{
-    name = 'battery',
-    outSignal = 33
-}, {
-    name = 'processing-unit',
-    outSignal = 36
 }}, {{
     name = 'piercing-rounds-magazine',
     outSignal = 18
@@ -163,9 +169,6 @@ local ITEM_TIERS = {{{
 }, {
     name = 'electric-furnace',
     outSignal = 29
-}, {
-    name = 'flying-robot-frame',
-    outSignal = 37
 }, {
     name = 'satellite',
     outSignal = 44
@@ -210,7 +213,7 @@ local STATE_NAMES = {"MEGA_SURVEY", "MEGA_CHECK", "MEGA_BUILD", "MEGA_WAIT_SURVE
 local blueprint_book = green['blueprint-book'] == 1
 if blueprint_book and not PAUSE then
     if not var.doneInit then
-        if currently_constructed_megatiles == 1 then
+        if red['signal-info'] == 1 then
             var.doneInit = true
             var.last_nuclear_megatile = 0
             var.researchDeadline = math.huge
@@ -259,11 +262,21 @@ if blueprint_book and not PAUSE then
             ["stone"] = true,
             ["uranium-ore"] = true,
             ["copper-ore"] = true,
-            ["iron-ore"] = true
+            ["iron-ore"] = true,
+            ["laser-turret"] = true
         }
         for k, v in pairs(green) do
             if ignore_signals[k] == nil then
                 ghosts[#ghosts + 1] = k
+            end
+        end
+        -- Module ghosts don't show up on the radar but we should still wait for them aslong as the modules are built
+        if currently_constructed_megatiles > 3 then
+            if red["productivity-module-3"] > 0 and red["productivity-module-3"] - 50 < 10 then
+                ghosts[#ghosts + 1] = "productivity-module-3"
+            end
+            if red["speed-module-3"] > 0 and red["speed-module-3"] - 50 < 10 then
+                ghosts[#ghosts + 1] = "speed-module-3"
             end
         end
         if var.CURRENT_STATE == MEGA_SURVEY or var.CURRENT_STATE == MEGA_WAIT_SURVEY then
@@ -324,7 +337,7 @@ if blueprint_book and not PAUSE then
         elseif var.CURRENT_STATE == MEGA_CHECK then
             if currently_constructed_megatiles == 1 then
                 if DEBUG then
-                    game.print("Building brain tile")
+                    game.print("Building brain megatile")
                 end
                 var.BUILD_MEGA = MEGA_BRAIN
                 var.CURRENT_STATE = MEGA_BUILD
@@ -332,31 +345,32 @@ if blueprint_book and not PAUSE then
             elseif currently_constructed_megatiles == 2 or var.need_power then
                 if red['nuclear-reactor'] >= 4 and red['heat-exchanger'] >= 48 and red['steam-turbine'] >= 52 and
                     red['heat-pipe'] >= 160 then
-                    game.print("Building nuclear at " .. var.megablock_x .. "x and " .. var.megablock_y .. "y")
+                    game.print("Building nuclear megatile")
                     var.BUILD_MEGA = MEGA_NUCLEAR
                     var.CURRENT_STATE = MEGA_BUILD
                     var.FILLABLE_MEGA = false
-                else
+                elseif DEBUG then
                     game.print("Waiting for nuclear components")
                 end
-            elseif green['uranium-ore'] > 100000 or green['uranium-ore'] + green['iron-ore'] + green['copper-ore'] +
-                green['stone'] + green['coal'] > 1000000 then
+            elseif currently_constructed_megatiles > 3 and
+                (green['uranium-ore'] > 100000 or green['uranium-ore'] + green['iron-ore'] + green['copper-ore'] +
+                    green['stone'] + green['coal'] > 1000000) then
                 -- If the megatile has uranium, or has abundant resources,
                 -- it must be mined (we'll use a blank patch and let the
                 -- smaller surveys divy it up)
-                game.print((currently_constructed_megatiles + 1) .. '[img=item.laser-turret] [img=item.roboport]')
+                game.print("Building mining megatile")
                 var.BUILD_MEGA = MEGA_BASE
                 var.CURRENT_STATE = MEGA_BUILD
                 var.FILLABLE_MEGA = true
-            elseif (red['petroleum-gas-barrel'] < 0 or red['light-oil-barrel'] < 0 or red['heavy-oil-barrel'] < 0) then
-                game.print((currently_constructed_megatiles + 1) ..
-                               '[img=item.oil-refinery] [img=fluid.petroleum-gas] [img=fluid.light-oil] [img=fluid.heavy-oil]')
+            elseif currently_constructed_megatiles == 3 or
+                (red['petroleum-gas-barrel'] < 50 or red['light-oil-barrel'] < 50 or red['heavy-oil-barrel'] < 50) then
+                game.print("Building coal liquefaction megatile")
                 var.BUILD_MEGA = MEGA_COAL_LIQUEFACTION
                 var.CURRENT_STATE = MEGA_BUILD
                 var.FILLABLE_MEGA = false
             else
                 -- If we're good on power and oil, build a blank megatile
-                game.print((currently_constructed_megatiles + 1) .. '[img=item.laser-turret] [img=item.roboport]')
+                game.print("Building blank megatile")
                 var.BUILD_MEGA = MEGA_BASE
                 var.CURRENT_STATE = MEGA_BUILD
                 var.FILLABLE_MEGA = true
@@ -367,15 +381,20 @@ if blueprint_book and not PAUSE then
             out['green/signal-Y'] = var.megablock_y
             delay = 1
             var.CURRENT_STATE = MEGA_WAIT_SURVEY
+            var.WAIT_COUNT = 0
         elseif var.CURRENT_STATE == MEGA_WAIT then
             if #ghosts > 0 then
-                game.print("Waiting for ghosts:")
-                for _, v in pairs(ghosts) do
-                    game.print(v)
+                if var.WAIT_COUNT > 0 then
+                    game.print("Waiting for ghosts:")
+                    for _, v in pairs(ghosts) do
+                        game.print(v)
+                    end
                 end
                 var.CURRENT_STATE = MEGA_WAIT_SURVEY
+                var.WAIT_COUNT = var.WAIT_COUNT + 1
             else
                 game.print("Completed megatile " .. currently_constructed_megatiles)
+                var.WAIT_COUNT = 0
                 if var.FILLABLE_MEGA then
                     var.CURRENT_STATE = MINI_SURVEY
                 else
@@ -446,8 +465,7 @@ if blueprint_book and not PAUSE then
                     type = "item",
                     name = "uranium-ore"
                 }
-                game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
-                               (var.tilesBuilt + 1) .. '[img=item.uranium-ore]')
+                game.print("Building uranium tile " .. '[img=item.uranium-ore]')
                 var.BUILD_MINI = SMALL_MINING_URANIUM
                 var.CURRENT_STATE = MINI_BUILD
             elseif (green['iron-ore'] > 100000 and red['iron-ore'] < 250000) or
@@ -468,8 +486,7 @@ if blueprint_book and not PAUSE then
                     type = "item",
                     name = oreType
                 }
-                game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
-                               (var.tilesBuilt + 1) .. '[img=item.' .. oreType .. ']')
+                game.print("Building mining tile " .. '[img=item.' .. oreType .. ']')
                 var.BUILD_MINI = SMALL_MINING
                 var.CURRENT_STATE = MINI_BUILD
             elseif var.need_artillery then
@@ -478,8 +495,7 @@ if blueprint_book and not PAUSE then
                     type = "item",
                     name = 'artillery-targeting-remote'
                 }
-                game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
-                               (var.tilesBuilt + 1) .. '[img=item.artillery-targeting-remote]')
+                game.print("Building artillery tile" .. '[img=item.artillery-targeting-remote]')
                 var.BUILD_MINI = SMALL_ARTILLERY
                 var.CURRENT_STATE = MINI_BUILD
             else
@@ -526,8 +542,7 @@ if blueprint_book and not PAUSE then
                         type = "item",
                         name = most_needed_item.name
                     }
-                    game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
-                                   (var.tilesBuilt + 1) .. '[img=item.' .. most_needed_item.name .. ']')
+                    game.print("Building prioritised item " .. '[img=item.' .. most_needed_item.name .. ']')
                     var.BUILD_MINI = most_needed_item.outSignal
                     var.CURRENT_STATE = MINI_BUILD
                 elseif currently_constructed_research_tiles < MAX_RESEARCH_TILES and game.tick > var.researchDeadline then
@@ -535,8 +550,7 @@ if blueprint_book and not PAUSE then
                         type = "item",
                         name = "lab"
                     }
-                    game.print(currently_constructed_megatiles .. ' * 8 + ' .. (var.tilesBuilt % 8 + 1) .. ' = ' ..
-                                   (var.tilesBuilt + 1) .. ' Research!')
+                    game.print("Building research tile")
                     var.BUILD_MINI = SMALL_LABS
                     var.CURRENT_STATE = MINI_BUILD
                     var.researchDeadline = math.huge
@@ -545,7 +559,7 @@ if blueprint_book and not PAUSE then
                     -- if that's still the case when it's done, we'll build research.
                     -- This is to prevent new research tiles from sneaking in
                     -- during a really short pre-demand-shock period.
-                    game.print('Setting a research deadline in ' .. (5 * 60) .. ' seconds...')
+                    game.print('Setting a research deadline for ' .. (5 * 60) .. ' seconds')
                     var.researchDeadline = game.tick + (5 * 60 * 60)
                 end
             end
@@ -555,16 +569,21 @@ if blueprint_book and not PAUSE then
             out['signal-Y'] = var.miniblock_y
             delay = 1
             var.CURRENT_STATE = MINI_WAIT_SURVEY
+            var.WAIT_COUNT = 0
         elseif var.CURRENT_STATE == MINI_WAIT then
             if #ghosts > 0 then
-                game.print("Waiting for ghosts:")
-                for _, v in pairs(ghosts) do
-                    game.print(v)
+                if var.WAIT_COUNT > 0 then
+                    game.print("Waiting for ghosts:")
+                    for _, v in pairs(ghosts) do
+                        game.print(v)
+                    end
                 end
                 var.CURRENT_STATE = MINI_WAIT_SURVEY
+                var.WAIT_COUNT = var.WAIT_COUNT + 1
             else
-                var.tilesBuilt = var.tilesBuilt + 1
                 game.print("Completed minitile " .. var.tilesBuilt)
+                var.tilesBuilt = var.tilesBuilt + 1
+                var.WAIT_COUNT = 0
                 if var.tilesBuilt % 8 == 0 then
                     var.CURRENT_STATE = MEGA_SURVEY
                 else
