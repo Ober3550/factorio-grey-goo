@@ -342,16 +342,6 @@ if blueprint_book and not PAUSE then
                 var.BUILD_MEGA = MEGA_BRAIN
                 var.CURRENT_STATE = MEGA_BUILD
                 var.FILLABLE_MEGA = true
-            elseif currently_constructed_megatiles == 2 or var.need_power then
-                if red['nuclear-reactor'] >= 4 and red['heat-exchanger'] >= 48 and red['steam-turbine'] >= 52 and
-                    red['heat-pipe'] >= 160 then
-                    game.print("Building nuclear megatile")
-                    var.BUILD_MEGA = MEGA_NUCLEAR
-                    var.CURRENT_STATE = MEGA_BUILD
-                    var.FILLABLE_MEGA = false
-                elseif DEBUG then
-                    game.print("Waiting for nuclear components")
-                end
             elseif currently_constructed_megatiles > 3 and
                 (green['uranium-ore'] > 100000 or green['uranium-ore'] + green['iron-ore'] + green['copper-ore'] +
                     green['stone'] + green['coal'] > 1000000) then
@@ -362,6 +352,16 @@ if blueprint_book and not PAUSE then
                 var.BUILD_MEGA = MEGA_BASE
                 var.CURRENT_STATE = MEGA_BUILD
                 var.FILLABLE_MEGA = true
+            elseif currently_constructed_megatiles == 2 or var.need_power then
+                if red['nuclear-reactor'] >= 4 and red['heat-exchanger'] >= 48 and red['steam-turbine'] >= 52 and
+                    red['heat-pipe'] >= 160 then
+                    game.print("Building nuclear megatile")
+                    var.BUILD_MEGA = MEGA_NUCLEAR
+                    var.CURRENT_STATE = MEGA_BUILD
+                    var.FILLABLE_MEGA = false
+                elseif DEBUG then
+                    game.print("Waiting for nuclear components")
+                end
             elseif currently_constructed_megatiles == 3 or
                 (red['petroleum-gas-barrel'] < 50 or red['light-oil-barrel'] < 50 or red['heavy-oil-barrel'] < 50) then
                 game.print("Building coal liquefaction megatile")
