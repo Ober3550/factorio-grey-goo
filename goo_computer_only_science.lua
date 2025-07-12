@@ -105,19 +105,19 @@ local ITEM_TIERS = {{{
     outSignal = 86
 }, {
     name = 'iron-plate',
-    outSignal = 3
+    outSignal = 116
 }, {
     name = 'copper-plate',
-    outSignal = 4
+    outSignal = 116
 }, {
     name = 'stone-brick',
-    outSignal = 5
+    outSignal = 116
 }}, {{
     name = 'iron-gear-wheel',
     outSignal = 7
 }, {
     name = 'steel-plate',
-    outSignal = 6
+    outSignal = 116
 }}, {{
     name = 'electronic-circuit',
     outSignal = 12
@@ -489,6 +489,7 @@ if blueprint_book and not PAUSE then
                 game.print("Building mining tile " .. '[img=item.' .. oreType .. ']')
                 var.BUILD_MINI = SMALL_MINING
                 var.CURRENT_STATE = MINI_BUILD
+
             elseif var.need_artillery then
                 var.need_artillery = false
                 tagSignal = {
@@ -497,6 +498,11 @@ if blueprint_book and not PAUSE then
                 }
                 game.print("Building artillery tile" .. '[img=item.artillery-targeting-remote]')
                 var.BUILD_MINI = SMALL_ARTILLERY
+                var.CURRENT_STATE = MINI_BUILD
+            elseif red['iron-ore'] < 1000 or red['copper-ore'] < 1000 or red['coal'] < 1000 or red['stone'] < 1000 then
+                -- If we have no ores skip building more production
+                game.print("Skipping tile to search for more ores")
+                var.BUILD_MINI = 109
                 var.CURRENT_STATE = MINI_BUILD
             else
                 local most_needed_item = nil
