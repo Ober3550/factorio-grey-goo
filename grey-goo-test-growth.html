@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<!-- saved from url=(0037)https://ober3550.github.io/ninja.html -->
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>Grey Goo Order</title>
+        <meta name="viewport" content="width=device-width, user-scalable=no" />
+        <script src="https://cdn.jsdelivr.net/npm/p5@0.10.2/lib/p5.js"></script>
+        <script>
+            function setup() {
+                createCanvas(800, 800);
+            }
+
+            const GRID_SIZE = 10;
+            const HALF_GRID = GRID_SIZE / 2;
+            function draw_cell(x, y, color = "#FFFFFF") {
+                fill(color);
+                rect(x * GRID_SIZE - HALF_GRID, y * GRID_SIZE - HALF_GRID, GRID_SIZE, GRID_SIZE);
+            }
+
+            const zero_bias = [
+                { x: 0, y: 0 },
+                { x: 0, y: -1 },
+                { x: 1, y: 0 },
+                { x: 0, y: 1 },
+                { x: -1, y: 0 },
+                { x: 1, y: -1 },
+                { x: 1, y: 1 },
+                { x: -1, y: 1 },
+                { x: -1, y: -1 },
+            ];
+            const cardinal_bias = [
+                { x: 0, y: 1 },
+                { x: -1, y: 1 },
+                { x: 1, y: 1 },
+                { x: 0, y: 0 },
+                { x: -1, y: 0 },
+                { x: 1, y: 0 },
+                { x: 0, y: -1 },
+                { x: -1, y: -1 },
+                { x: 1, y: -1 },
+            ];
+            const diagonal_bias = [
+                { x: -1, y: 1 },
+                { x: -1, y: 0 },
+                { x: 0, y: 1 },
+                { x: 0, y: 0 },
+                { x: -1, y: -1 },
+                { x: 1, y: 1 },
+                { x: 0, y: -1 },
+                { x: 1, y: 0 },
+                { x: 1, y: -1 },
+            ];
+
+            function flower(n) {
+                let scale = 1;
+                let divisor = 1;
+                let new_n = n;
+                // Find the size of the root node
+                while (new_n >= 9) {
+                    scale = scale * 3;
+                    divisor = divisor * 9;
+                    new_n = new_n / 9;
+                }
+                let x = 0;
+                let y = 0;
+                // Only the root node has no directional bias
+                const base_region = Math.floor(n / divisor);
+                x = x + zero_bias[base_region].x * scale;
+                y = y + zero_bias[base_region].y * scale;
+                // Repeat the process multiple times if needed
+                while (scale > 1) {
+                    scale = scale / 3;
+                    divisor = divisor / 9;
+                    let x_off, y_off;
+                    const region = Math.floor(n / divisor);
+                    // All child nodes have either cardinal or diagonal bias
+                    if (base_region < 5) {
+                        x_off = cardinal_bias[region % 9].x * scale;
+                        y_off = cardinal_bias[region % 9].y * scale;
+                    } else {
+                        x_off = diagonal_bias[region % 9].x * scale;
+                        y_off = diagonal_bias[region % 9].y * scale;
+                    }
+                    const temp = x_off;
+                    const rotation = (base_region - 1) % 4;
+                    // We rotate the biases according to the root node
+                    if (rotation == 1) {
+                        x_off = -y_off;
+                        y_off = temp;
+                    } else if (rotation == 2) {
+                        x_off = -temp;
+                        y_off = -y_off;
+                    } else if (rotation == 3) {
+                        x_off = y_off;
+                        y_off = -temp;
+                    }
+                    x = x + x_off;
+                    y = y + y_off;
+                }
+                return { x, y };
+            }
+
+            function spiral(n) {
+                let x = 0;
+                let y = 0;
+                let steps = 0;
+                let max_steps = 1;
+                let turns_taken = 0;
+                for (let i = 1; i < n; i++) {
+                    if (turns_taken % 4 == 0) {
+                        x--;
+                    } else if (turns_taken % 4 == 1) {
+                        y--;
+                    } else if (turns_taken % 4 == 2) {
+                        x++;
+                    } else if (turns_taken % 4 == 3) {
+                        y++;
+                    }
+                    steps++;
+                    if (steps == max_steps) {
+                        steps = 0;
+                        turns_taken = turns_taken + 1;
+                    }
+                    if (steps == 0 && turns_taken % 2 == 0) {
+                        max_steps = max_steps + 1;
+                    }
+                }
+                return { x, y };
+            }
+
+            function draw() {
+                background(220);
+                translate(width / 2, height / 2);
+                const cells = document.getElementById("slider").value;
+                for (let n = 0; n < cells; n++) {
+                    const cell = flower(n);
+                    draw_cell(cell.x, cell.y);
+                }
+            }
+        </script>
+    </head>
+    <body>
+        <input type="range" min="1" max="10000" value="50" id="slider" style="width: 100%" /><br />
+    </body>
+</html>

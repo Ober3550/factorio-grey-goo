@@ -105,19 +105,19 @@ local ITEM_TIERS = {{{
     outSignal = 86
 }, {
     name = 'iron-plate',
-    outSignal = 116
+    outSignal = 3
 }, {
     name = 'copper-plate',
-    outSignal = 116
+    outSignal = 4
 }, {
     name = 'stone-brick',
-    outSignal = 116
+    outSignal = 5
 }}, {{
     name = 'iron-gear-wheel',
     outSignal = 7
 }, {
     name = 'steel-plate',
-    outSignal = 116
+    outSignal = 6
 }}, {{
     name = 'electronic-circuit',
     outSignal = 12
@@ -272,10 +272,10 @@ if blueprint_book and not PAUSE then
         end
         -- Module ghosts don't show up on the radar but we should still wait for them aslong as the modules are built
         if currently_constructed_megatiles > 3 then
-            if red["productivity-module-3"] > 0 and red["productivity-module-3"] - 50 < 10 then
+            if red["productivity-module-3"] > 0 and red["productivity-module-3"] < 100 then
                 ghosts[#ghosts + 1] = "productivity-module-3"
             end
-            if red["speed-module-3"] > 0 and red["speed-module-3"] - 50 < 10 then
+            if red["productivity-module-3"] > 0 and red["speed-module-3"] < 100 then
                 ghosts[#ghosts + 1] = "speed-module-3"
             end
         end
